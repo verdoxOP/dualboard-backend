@@ -1,0 +1,11 @@
+.git
+.gitignore
+.idea
+*.iml
+*.iws
+*.ipr
+target/
+docs/
+deps.txt
+*.md
+.vscode/
