@@ -1,17 +1,16 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
     container_name: dualboard-db
     environment:
-      POSTGRES_DB: dualboard
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-dualboard}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
       - dualboard-data:/var/lib/postgresql/data
+<<<<<<< HEAD
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -31,7 +30,53 @@ services:
       DB_PASSWORD: postgres
     ports:
       - "8080:8080"
+=======
+    networks:
+      - dualboard-net
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dualboard-backend
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/dualboard}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-postgres}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - dualboard-net
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../dualboard-frontend
+      dockerfile: Dockerfile
+    container_name: dualboard-frontend
+    environment:
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8080
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - dualboard-net
+    restart: unless-stopped
+>>>>>>> 00ef879 (commit)
 
 volumes:
   dualboard-data:
 
+networks:
+  dualboard-net:
+    driver: bridge

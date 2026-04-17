@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 .git
 .gitignore
 .idea
@@ -9,3 +10,16 @@ docs/
 deps.txt
 *.md
 .vscode/
+=======
+target/
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+*.log
+Dockerfile*
+docker-compose*.yml
+README*
+
+>>>>>>> 00ef879 (commit)
