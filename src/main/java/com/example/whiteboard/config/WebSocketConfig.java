@@ -20,11 +20,14 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        // Server → Client: messages broadcast to /topic/...
-        config.enableSimpleBroker("/topic");
+        // Server → Client: /topic for room broadcasts, /queue for user-specific messages (e.g. errors)
+        config.enableSimpleBroker("/topic", "/queue");
 
         // Client → Server: messages sent to /app/... are routed to @MessageMapping methods
         config.setApplicationDestinationPrefixes("/app");
+
+        // Prefix for user-specific destinations (e.g. /user/queue/errors)
+        config.setUserDestinationPrefix("/user");
     }
 
     @Override
