@@ -68,6 +68,8 @@ class DrawingServiceTest {
             Map.of("color", "#FF0000", "brushSize", 5, "points", "[{\"x\":10,\"y\":20}]")
     );
 
+    @Mock private java.security.Principal mockPrincipal;
+
     // ---- happy path --------------------------------------------------------
 
     @Test
@@ -76,13 +78,13 @@ class DrawingServiceTest {
         Room room = buildRoom(user);
         DrawingEvent savedEvent = buildSavedEvent(room, DrawingEventType.STROKE, VALID_STROKE.data(), 1L);
 
-        when(securityService.getCurrentUserId()).thenReturn(USER_ID);
+        when(securityService.getCurrentUserId(mockPrincipal)).thenReturn(USER_ID);
         when(membershipRepository.existsByUserIdAndRoomId(USER_ID, ROOM_ID)).thenReturn(true);
         when(roomRepository.findById(ROOM_ID)).thenReturn(Optional.of(room));
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(drawingEventRepository.save(any(DrawingEvent.class))).thenReturn(savedEvent);
 
-        drawingService.processDrawEvent(ROOM_ID, VALID_STROKE);
+        drawingService.processDrawEvent(ROOM_ID, VALID_STROKE, mockPrincipal);
 
         // verify persistence
         ArgumentCaptor<DrawingEvent> eventCaptor = ArgumentCaptor.forClass(DrawingEvent.class);
@@ -116,13 +118,13 @@ class DrawingServiceTest {
         Room room = buildRoom(user);
         DrawingEvent savedEvent = buildSavedEvent(room, DrawingEventType.SHAPE, shapeRequest.data(), 2L);
 
-        when(securityService.getCurrentUserId()).thenReturn(USER_ID);
+        when(securityService.getCurrentUserId(mockPrincipal)).thenReturn(USER_ID);
         when(membershipRepository.existsByUserIdAndRoomId(USER_ID, ROOM_ID)).thenReturn(true);
         when(roomRepository.findById(ROOM_ID)).thenReturn(Optional.of(room));
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(drawingEventRepository.save(any(DrawingEvent.class))).thenReturn(savedEvent);
 
-        drawingService.processDrawEvent(ROOM_ID, shapeRequest);
+        drawingService.processDrawEvent(ROOM_ID, shapeRequest, mockPrincipal);
 
         verify(drawingEventRepository).save(argThat(e -> e.getType() == DrawingEventType.SHAPE));
         verify(messagingTemplate).convertAndSend(
@@ -138,13 +140,13 @@ class DrawingServiceTest {
         Room room = buildRoom(user);
         DrawingEvent savedEvent = buildSavedEvent(room, DrawingEventType.STROKE, lowercase.data(), 3L);
 
-        when(securityService.getCurrentUserId()).thenReturn(USER_ID);
+        when(securityService.getCurrentUserId(mockPrincipal)).thenReturn(USER_ID);
         when(membershipRepository.existsByUserIdAndRoomId(USER_ID, ROOM_ID)).thenReturn(true);
         when(roomRepository.findById(ROOM_ID)).thenReturn(Optional.of(room));
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(drawingEventRepository.save(any(DrawingEvent.class))).thenReturn(savedEvent);
 
-        drawingService.processDrawEvent(ROOM_ID, lowercase);
+        drawingService.processDrawEvent(ROOM_ID, lowercase, mockPrincipal);
 
         verify(drawingEventRepository).save(argThat(e -> e.getType() == DrawingEventType.STROKE));
     }
@@ -153,9 +155,9 @@ class DrawingServiceTest {
 
     @Test
     void processDrawEvent_unauthenticatedUser_throwsAccessDeniedException() {
-        when(securityService.getCurrentUserId()).thenReturn(null);
+        when(securityService.getCurrentUserId(mockPrincipal)).thenReturn(null);
 
-        assertThatThrownBy(() -> drawingService.processDrawEvent(ROOM_ID, VALID_STROKE))
+        assertThatThrownBy(() -> drawingService.processDrawEvent(ROOM_ID, VALID_STROKE, mockPrincipal))
                 .isInstanceOf(AccessDeniedException.class)
                 .hasMessageContaining("Authentication required");
 
@@ -166,10 +168,10 @@ class DrawingServiceTest {
 
     @Test
     void processDrawEvent_nonMember_throwsAccessDeniedException() {
-        when(securityService.getCurrentUserId()).thenReturn(USER_ID);
+        when(securityService.getCurrentUserId(mockPrincipal)).thenReturn(USER_ID);
         when(membershipRepository.existsByUserIdAndRoomId(USER_ID, ROOM_ID)).thenReturn(false);
 
-        assertThatThrownBy(() -> drawingService.processDrawEvent(ROOM_ID, VALID_STROKE))
+        assertThatThrownBy(() -> drawingService.processDrawEvent(ROOM_ID, VALID_STROKE, mockPrincipal))
                 .isInstanceOf(AccessDeniedException.class)
                 .hasMessageContaining("Not a member");
 
@@ -180,12 +182,12 @@ class DrawingServiceTest {
 
     @Test
     void processDrawEvent_blankType_throwsIllegalArgumentException() {
-        when(securityService.getCurrentUserId()).thenReturn(USER_ID);
+        when(securityService.getCurrentUserId(mockPrincipal)).thenReturn(USER_ID);
         when(membershipRepository.existsByUserIdAndRoomId(USER_ID, ROOM_ID)).thenReturn(true);
 
         DrawingEventRequest bad = new DrawingEventRequest("   ", Map.of("x", 1));
 
-        assertThatThrownBy(() -> drawingService.processDrawEvent(ROOM_ID, bad))
+        assertThatThrownBy(() -> drawingService.processDrawEvent(ROOM_ID, bad, mockPrincipal))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("type");
 
@@ -194,12 +196,12 @@ class DrawingServiceTest {
 
     @Test
     void processDrawEvent_unknownType_throwsIllegalArgumentException() {
-        when(securityService.getCurrentUserId()).thenReturn(USER_ID);
+        when(securityService.getCurrentUserId(mockPrincipal)).thenReturn(USER_ID);
         when(membershipRepository.existsByUserIdAndRoomId(USER_ID, ROOM_ID)).thenReturn(true);
 
         DrawingEventRequest bad = new DrawingEventRequest("CIRCLE", Map.of("x", 1));
 
-        assertThatThrownBy(() -> drawingService.processDrawEvent(ROOM_ID, bad))
+        assertThatThrownBy(() -> drawingService.processDrawEvent(ROOM_ID, bad, mockPrincipal))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unknown event type: CIRCLE");
 
@@ -208,12 +210,12 @@ class DrawingServiceTest {
 
     @Test
     void processDrawEvent_nullData_throwsIllegalArgumentException() {
-        when(securityService.getCurrentUserId()).thenReturn(USER_ID);
+        when(securityService.getCurrentUserId(mockPrincipal)).thenReturn(USER_ID);
         when(membershipRepository.existsByUserIdAndRoomId(USER_ID, ROOM_ID)).thenReturn(true);
 
         DrawingEventRequest bad = new DrawingEventRequest("STROKE", null);
 
-        assertThatThrownBy(() -> drawingService.processDrawEvent(ROOM_ID, bad))
+        assertThatThrownBy(() -> drawingService.processDrawEvent(ROOM_ID, bad, mockPrincipal))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("data");
 
@@ -222,12 +224,12 @@ class DrawingServiceTest {
 
     @Test
     void processDrawEvent_emptyData_throwsIllegalArgumentException() {
-        when(securityService.getCurrentUserId()).thenReturn(USER_ID);
+        when(securityService.getCurrentUserId(mockPrincipal)).thenReturn(USER_ID);
         when(membershipRepository.existsByUserIdAndRoomId(USER_ID, ROOM_ID)).thenReturn(true);
 
         DrawingEventRequest bad = new DrawingEventRequest("STROKE", Map.of());
 
-        assertThatThrownBy(() -> drawingService.processDrawEvent(ROOM_ID, bad))
+        assertThatThrownBy(() -> drawingService.processDrawEvent(ROOM_ID, bad, mockPrincipal))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("data");
 

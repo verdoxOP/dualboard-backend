@@ -20,7 +20,7 @@ import static org.mockito.Mockito.verify;
 
 /**
  * Unit tests for DrawingWebSocketController.
- *
+
  * The controller is intentionally thin — it delegates straight to DrawingService.
  * These tests verify:
  *  - handleDraw delegates to DrawingService with correct arguments
@@ -41,27 +41,30 @@ class DrawingWebSocketControllerTest {
 
     @Test
     void handleDraw_delegatesToDrawingService() {
-        controller.handleDraw(ROOM_ID, REQUEST);
-        verify(drawingService).processDrawEvent(ROOM_ID, REQUEST);
+        java.security.Principal principal = org.mockito.Mockito.mock(java.security.Principal.class);
+        controller.handleDraw(ROOM_ID, REQUEST, principal);
+        verify(drawingService).processDrawEvent(ROOM_ID, REQUEST, principal);
     }
 
     @Test
     void handleDraw_whenServiceThrowsAccessDenied_exceptionPropagatesForHandlerToIntercept() {
+        java.security.Principal principal = org.mockito.Mockito.mock(java.security.Principal.class);
         doThrow(new AccessDeniedException("Not a member"))
-                .when(drawingService).processDrawEvent(ROOM_ID, REQUEST);
+                .when(drawingService).processDrawEvent(ROOM_ID, REQUEST, principal);
 
         // The exception must propagate so @MessageExceptionHandler can catch it
-        assertThatThrownBy(() -> controller.handleDraw(ROOM_ID, REQUEST))
+        assertThatThrownBy(() -> controller.handleDraw(ROOM_ID, REQUEST, principal))
                 .isInstanceOf(AccessDeniedException.class)
                 .hasMessageContaining("Not a member");
     }
 
     @Test
     void handleDraw_whenServiceThrowsIllegalArgument_exceptionPropagatesForHandlerToIntercept() {
+        java.security.Principal principal = org.mockito.Mockito.mock(java.security.Principal.class);
         doThrow(new IllegalArgumentException("Unknown event type: CIRCLE"))
-                .when(drawingService).processDrawEvent(ROOM_ID, REQUEST);
+                .when(drawingService).processDrawEvent(ROOM_ID, REQUEST, principal);
 
-        assertThatThrownBy(() -> controller.handleDraw(ROOM_ID, REQUEST))
+        assertThatThrownBy(() -> controller.handleDraw(ROOM_ID, REQUEST, principal))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unknown event type: CIRCLE");
     }

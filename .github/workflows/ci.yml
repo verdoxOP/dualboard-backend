@@ -45,6 +45,52 @@ jobs:
         env:
           SPRING_PROFILES_ACTIVE: dev
 
+  zap_scan:
+    name: OWASP ZAP Baseline Scan
+    runs-on: ubuntu-latest
+    needs: build-and-test
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: dualboard
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Start backend
+        run: |
+          ./mvnw spring-boot:run --quiet --no-transfer-progress &
+          sleep 60  # Adjust if needed to ensure it's ready
+
+      - name: Pull ZAP Docker image
+        run: docker pull ghcr.io/zaproxy/zaproxy:stable
+
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.10.0
+        with:
+          target: 'http://localhost:8080'
+        # You can uncomment the following to save the ZAP report as a workflow artifact:
+        # artifact_name: 'zap-report'
+
   docker:
     name: Build Docker Image
     runs-on: ubuntu-latest

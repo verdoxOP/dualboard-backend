@@ -45,14 +45,15 @@ public class DrawingService {
      *
      * @param roomId  the UUID of the target room (from the STOMP destination)
      * @param request the drawing payload sent by the client
+     * @param principal the authenticated principal making the request
      * @throws AccessDeniedException    if the user is not authenticated or not a room member
      * @throws IllegalArgumentException if the event type is unknown or the data payload is empty
      */
     @Transactional
-    public void processDrawEvent(UUID roomId, DrawingEventRequest request) {
+    public void processDrawEvent(UUID roomId, DrawingEventRequest request, java.security.Principal principal) {
 
         // Step 1 – identity: never trust a client-supplied user id
-        UUID userId = securityService.getCurrentUserId();
+        UUID userId = securityService.getCurrentUserId(principal);
         if (userId == null) {
             throw new AccessDeniedException("Authentication required");
         }
@@ -97,14 +98,14 @@ public class DrawingService {
                 .map(User::getDisplayName)
                 .orElse("Unknown");
 
-        DrawingEventResponse response = DrawingEventResponse.builder()
-                .id(event.getId())
-                .userId(userId)
-                .senderName(senderName)
-                .type(event.getType().name())
-                .data(event.getData())
-                .timestamp(event.getTimestamp())
-                .build();
+        DrawingEventResponse response = new DrawingEventResponse(
+                event.getId(),
+                userId,
+                senderName,
+                event.getType().name(),
+                event.getData(),
+                event.getTimestamp()
+        );
 
         messagingTemplate.convertAndSend("/topic/room/" + roomId, response);
     }

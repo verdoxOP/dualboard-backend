@@ -11,10 +11,8 @@ import java.util.UUID;
 
 /**
  * Custom security service for declarative authorization via @PreAuthorize.
- *
  * Usage in controllers:
  *   @PreAuthorize("@securityService.isMember(#roomId)")
- *
  * See ADR-7 in LU1_ARCHITECTURE.md for why this approach was chosen
  * over manual checks or JWT-encoded membership.
  */
@@ -39,7 +37,6 @@ public class SecurityService {
     /**
      * Extracts the application-level User UUID from the current security context.
      * Returns null if not authenticated.
-     *
      * Note: The actual UUID is stored as an attribute on the OAuth2User principal
      * by our CustomOAuth2UserService during login.
      */
@@ -61,5 +58,29 @@ public class SecurityService {
         }
         return null;
     }
-}
 
+    /**
+     * Extracts the application-level User UUID from a given Principal (useful for WebSockets).
+     */
+    public UUID getCurrentUserId(java.security.Principal principal) {
+        if (principal == null) {
+            return getCurrentUserId();
+        }
+
+        Object p = principal;
+        if (principal instanceof Authentication auth) {
+            p = auth.getPrincipal();
+        }
+
+        if (p instanceof OAuth2User oauth2User) {
+            Object userId = oauth2User.getAttributes().get("app_user_id");
+            if (userId instanceof UUID uuid) {
+                return uuid;
+            }
+            if (userId instanceof String str) {
+                return UUID.fromString(str);
+            }
+        }
+        return null;
+    }
+}

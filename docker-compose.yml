@@ -58,9 +58,10 @@ services:
       - dualboard-net
     restart: unless-stopped
 
-volumes:
-  dualboard-data:
 
 networks:
   dualboard-net:
     driver: bridge
+
+volumes:
+  dualboard-data:

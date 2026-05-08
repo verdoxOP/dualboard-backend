@@ -2,6 +2,7 @@ package com.example.whiteboard.controller;
 
 import com.example.whiteboard.dto.CreateRoomRequest;
 import com.example.whiteboard.dto.DrawingEventResponse;
+import com.example.whiteboard.dto.JoinRoomRequest;
 import com.example.whiteboard.dto.RoomResponse;
 import com.example.whiteboard.security.SecurityService;
 import com.example.whiteboard.service.RoomService;
@@ -18,7 +19,6 @@ import java.util.UUID;
 
 /**
  * Room management controller (US-2.1, US-2.2, US-2.3).
- *
  * Security model (ADR-7):
  * - All endpoints require authentication (enforced by SecurityConfig)
  * - Room-specific endpoints use @PreAuthorize with SecurityService.isMember()
@@ -46,22 +46,20 @@ public class RoomController {
     /**
      * POST /api/v1/rooms/join/{inviteCode}
      * Join an existing room by invite code.
-     *
      * Returns 404 if code is invalid, 409 if already a member.
      */
     @PostMapping("/join/{inviteCode}")
     public ResponseEntity<?> joinRoom(@PathVariable String inviteCode) {
-        UUID userId = securityService.getCurrentUserId();
-        try {
-            RoomResponse room = roomService.joinRoom(inviteCode, userId);
-            return ResponseEntity.ok(room);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", e.getMessage()));
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("error", e.getMessage()));
-        }
+        return joinRoomByCode(inviteCode);
+    }
+
+    /**
+     * POST /api/v1/rooms/join
+     * Join an existing room using JSON body: { "inviteCode": "ABC123" }
+     */
+    @PostMapping("/join")
+    public ResponseEntity<?> joinRoom(@Valid @RequestBody JoinRoomRequest request) {
+        return joinRoomByCode(request.inviteCode());
     }
 
     /**
@@ -98,5 +96,18 @@ public class RoomController {
         List<DrawingEventResponse> history = roomService.getRoomHistory(roomId);
         return ResponseEntity.ok(history);
     }
-}
 
+    private ResponseEntity<?> joinRoomByCode(String inviteCode) {
+        UUID userId = securityService.getCurrentUserId();
+        try {
+            RoomResponse room = roomService.joinRoom(inviteCode, userId);
+            return ResponseEntity.ok(room);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+}

@@ -8,6 +8,7 @@ import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageExceptionHandler;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.annotation.SendToUser;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Controller;
@@ -32,6 +33,7 @@ import java.util.UUID;
 public class DrawingWebSocketController {
 
     private final DrawingService drawingService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     /**
      * Entry point for client draw events.
@@ -45,8 +47,19 @@ public class DrawingWebSocketController {
      */
     @MessageMapping("/draw/{roomId}")
     public void handleDraw(@DestinationVariable UUID roomId,
-                           @Payload DrawingEventRequest request) {
-        drawingService.processDrawEvent(roomId, request);
+                           @Payload DrawingEventRequest request,
+                           java.security.Principal principal) {
+        drawingService.processDrawEvent(roomId, request, principal);
+    }
+
+    /**
+     * Entry point for mid-draw preview events.
+     * Broadcasts immediately without persistence for real-time responsiveness.
+     */
+    @MessageMapping("/draw/{roomId}/preview")
+    public void handleDrawPreview(@DestinationVariable UUID roomId,
+                                  @Payload DrawingEventRequest request) {
+        messagingTemplate.convertAndSend("/topic/room/" + roomId + "/preview", request);
     }
 
     /**

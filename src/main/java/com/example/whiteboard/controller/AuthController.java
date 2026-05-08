@@ -1,7 +1,6 @@
 package com.example.whiteboard.controller;
 
 import com.example.whiteboard.dto.UserResponse;
-import com.example.whiteboard.model.User;
 import com.example.whiteboard.repository.UserRepository;
 import com.example.whiteboard.security.SecurityService;
 import lombok.RequiredArgsConstructor;
@@ -14,11 +13,9 @@ import java.util.UUID;
 
 /**
  * Authentication controller (US-1.1, US-1.2).
- *
  * Note: The actual OAuth2 login flow is handled by Spring Security
  * (GET /oauth2/authorization/{provider}). This controller only
  * provides the /me endpoint for the frontend to fetch the current user.
- *
  * Logout is configured in SecurityConfig as a Spring Security logout handler.
  */
 @RestController
@@ -31,7 +28,6 @@ public class AuthController {
 
     /**
      * GET /api/v1/auth/me
-     *
      * Returns the currently authenticated user's profile.
      * The frontend calls this after OAuth redirect to confirm login
      * and fetch user data for the dashboard.
@@ -44,18 +40,13 @@ public class AuthController {
         }
 
         return userRepository.findById(userId)
-                .map(user -> ResponseEntity.ok(toResponse(user)))
-                .orElse(ResponseEntity.notFound().build());
-    }
-
-    private UserResponse toResponse(User user) {
-        return UserResponse.builder()
-                .id(user.getId())
-                .email(user.getEmail())
-                .displayName(user.getDisplayName())
-                .avatarUrl(user.getAvatarUrl())
-                .provider(user.getProvider().name())
-                .build();
+                .map(user -> ResponseEntity.ok(new UserResponse(
+                        user.getId(),
+                        user.getEmail(),
+                        user.getDisplayName(),
+                        user.getAvatarUrl(),
+                        user.getProvider()
+                )))
+                .orElse(ResponseEntity.status(401).build());
     }
 }
-

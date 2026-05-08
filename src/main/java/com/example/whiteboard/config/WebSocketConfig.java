@@ -8,7 +8,6 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 
 /**
  * WebSocket + STOMP configuration for real-time drawing sync.
- *
  * Architecture (see LU1_ARCHITECTURE.md, Section 3):
  * - /ws: STOMP handshake endpoint (with SockJS fallback)
  * - /app: prefix for client → server messages (e.g., /app/draw/{roomId})
@@ -35,8 +34,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         // WebSocket handshake endpoint
         // SockJS fallback for browsers that don't support WebSocket
         registry.addEndpoint("/ws")
-                .setAllowedOrigins("http://localhost:3000")
+                .setAllowedOriginPatterns("http://localhost:3000")
                 .withSockJS();
     }
 }
-

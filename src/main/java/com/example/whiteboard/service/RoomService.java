@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Business logic for room management (Iteration 1 stories: US-2.1, US-2.2, US-2.3).
@@ -35,6 +36,7 @@ public class RoomService {
     private static final String INVITE_CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final int INVITE_CODE_LENGTH = 6;
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final Pattern INVITE_CODE_PATTERN = Pattern.compile("^[A-Z0-9]{6}$");
 
     /**
      * Create a new room and make the creator both the owner and a member.
@@ -75,7 +77,9 @@ public class RoomService {
      */
     @Transactional
     public RoomResponse joinRoom(String inviteCode, UUID userId) {
-        Room room = roomRepository.findByInviteCode(inviteCode.toUpperCase())
+        String normalizedInviteCode = normalizeInviteCode(inviteCode);
+
+        Room room = roomRepository.findByInviteCode(normalizedInviteCode)
                 .orElseThrow(() -> new IllegalArgumentException("Room not found"));
 
         User user = userRepository.findById(userId)
@@ -134,32 +138,35 @@ public class RoomService {
         List<DrawingEvent> events = drawingEventRepository.findByRoomIdOrderByTimestampAsc(roomId);
 
         return events.stream()
-                .map(this::toDrawingEventResponse)
+                .map(this::mapToEventResponse)
                 .toList();
     }
 
     // ---- Private helpers ----
 
     private RoomResponse toResponse(Room room, boolean isOwner) {
-        return RoomResponse.builder()
-                .id(room.getId())
-                .name(room.getName())
-                .inviteCode(room.getInviteCode())
-                .createdAt(room.getCreatedAt())
-                .isOwner(isOwner)
-                .build();
+        return new RoomResponse(
+                room.getId(),
+                room.getName(),
+                room.getInviteCode(),
+                isOwner,
+                room.getCreatedAt()
+        );
     }
 
-    private DrawingEventResponse toDrawingEventResponse(DrawingEvent event) {
-        // For history, we don't include senderName to keep the query simple.
-        // The frontend can map userId → name from room membership data.
-        return DrawingEventResponse.builder()
-                .id(event.getId())
-                .userId(event.getUserId())
-                .type(event.getType().name())
-                .data(event.getData())
-                .timestamp(event.getTimestamp())
-                .build();
+    private DrawingEventResponse mapToEventResponse(DrawingEvent event) {
+        String senderName = userRepository.findById(event.getUserId())
+                .map(User::getDisplayName)
+                .orElse("Unknown");
+
+        return new DrawingEventResponse(
+                event.getId(),
+                event.getUserId(),
+                senderName,
+                event.getType().name(),
+                event.getData(),
+                event.getTimestamp()
+        );
     }
 
     /**
@@ -179,5 +186,16 @@ public class RoomService {
 
         return code;
     }
-}
 
+    private String normalizeInviteCode(String inviteCode) {
+        if (inviteCode == null) {
+            throw new IllegalArgumentException("Invite code is required");
+        }
+
+        String normalized = inviteCode.trim().toUpperCase();
+        if (!INVITE_CODE_PATTERN.matcher(normalized).matches()) {
+            throw new IllegalArgumentException("Invalid invite code format");
+        }
+        return normalized;
+    }
+}
