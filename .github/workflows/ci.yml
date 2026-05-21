@@ -50,7 +50,7 @@ jobs:
           restore-keys: ${{ runner.os }}-sonar
 
       - name: Build and analyze
-        run: ./mvnw -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=verdoxOP_dualboard-backend -Dsonar.organization=verdoxop -Dsonar.host.url=https://sonarcloud.io
+        run: ./mvnw -X -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=verdoxOP_dualboard-backend -Dsonar.organization=verdoxop -Dsonar.host.url=https://sonarcloud.io
         env:
           SPRING_PROFILES_ACTIVE: dev
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
