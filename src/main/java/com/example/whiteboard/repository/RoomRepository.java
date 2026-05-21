@@ -12,7 +12,7 @@ public interface RoomRepository extends JpaRepository<Room, UUID> {
 
     /**
      * Find a room by its human-shareable invite code.
-     * Used for the "Join Room" flow (US-2.2).
+     * Used for the "Join Room" flow (US-2.2). test
      */
     Optional<Room> findByInviteCode(String inviteCode);
 }
