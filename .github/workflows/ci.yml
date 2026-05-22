@@ -50,11 +50,10 @@ jobs:
           restore-keys: ${{ runner.os }}-sonar
 
       - name: Build and analyze
-        run: ./mvnw -X -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=verdoxOP_dualboard-backend -Dsonar.organization=verdoxop -Dsonar.host.url=https://sonarcloud.io
+        run: ./mvnw -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=verdoxOP_dualboard-backend -Dsonar.organization=verdoxop -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=${{ secrets.SONAR_TOKEN }}
         env:
           SPRING_PROFILES_ACTIVE: dev
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   zap_scan:
     name: OWASP ZAP Baseline Scan
@@ -99,8 +98,7 @@ jobs:
         uses: zaproxy/action-baseline@v0.10.0
         with:
           target: 'http://localhost:8080'
-        # You can uncomment the following to save the ZAP report as a workflow artifact:
-        # artifact_name: 'zap-report'
+        
 
   docker:
     name: Build Docker Image
