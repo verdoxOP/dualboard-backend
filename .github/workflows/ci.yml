@@ -1,114 +1,198 @@
-name: CI/CD Pipeline
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+            name: CI/CD Pipeline
 
-permissions:
-  contents: read
+            on:
+              push:
+                branches: [ main, sonarqube ]
+              pull_request:
+                branches: [ main ]
 
-jobs:
-  build-and-test:
-    name: Build & Test
-    runs-on: ubuntu-latest
+            permissions:
+              contents: read
+              issues: write
 
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: dualboard
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+            jobs:
+              build-and-test:
+                name: Build, Test & Analyze
+                runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+                services:
+                  postgres:
+                    image: postgres:16-alpine
+                    env:
+                      POSTGRES_DB: dualboard
+                      POSTGRES_USER: postgres
+                      POSTGRES_PASSWORD: postgres
+                    ports:
+                      - 5432:5432
+                    options: >-
+                      --health-cmd "pg_isready -U postgres"
+                      --health-interval 10s
+                      --health-timeout 5s
+                      --health-retries 5
 
-      - name: Set up JDK 25
-        uses: actions/setup-java@v4
-        with:
-          java-version: '25'
-          distribution: 'temurin'
-          cache: maven
+                steps:
+                  - name: Checkout code
+                    uses: actions/checkout@v4
+                    with:
+                      fetch-depth: 0
 
-      - name: Build and run tests
-        run: ./mvnw verify -B
-        env:
-          SPRING_PROFILES_ACTIVE: dev
+                  - name: Set up JDK 21
+                    uses: actions/setup-java@v4
+                    with:
+                      java-version: '21'
+                      distribution: 'temurin'
+                      cache: maven
 
-  zap_scan:
-    name: OWASP ZAP Baseline Scan
-    runs-on: ubuntu-latest
-    needs: build-and-test
+                  - name: Cache SonarQube packages
+                    uses: actions/cache@v4
+                    with:
+                      path: ~/.sonar/cache
+                      key: ${{ runner.os }}-sonar
+                      restore-keys: ${{ runner.os }}-sonar
 
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: dualboard
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+                  - name: Cache Maven packages
+                    uses: actions/cache@v4
+                    with:
+                      path: ~/.m2
+                      key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+                      restore-keys: ${{ runner.os }}-m2
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+                  # Compile and verify code first. If tests pass, the binary is generated.
+                  - name: Build and Test Application
+                    run: ./mvnw -B clean verify
+                    env:
+                      SPRING_PROFILES_ACTIVE: test
 
-      - name: Set up JDK 25
-        uses: actions/setup-java@v4
-        with:
-          java-version: '25'
-          distribution: 'temurin'
-          cache: maven
+                  # Runs analysis independently. If the self-hosted server is offline/unreachable,
+                  # it won't crash the pipeline.
+                  - name: Run SonarQube Analysis
+                    continue-on-error: true
+                    env:
+                      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+                      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+                    run: |
+                      ./mvnw org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+                        -Dsonar.projectKey=dualboard \
+                        -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+                        -Dsonar.token=${{ secrets.SONAR_TOKEN }}
 
-      - name: Start backend
-        run: |
-          ./mvnw spring-boot:run --quiet --no-transfer-progress &
-          sleep 60  # Adjust if needed to ensure it's ready
+              docker-build:
+                name: Build Docker Image
+                runs-on: ubuntu-latest
+                needs: build-and-test
 
-      - name: Pull ZAP Docker image
-        run: docker pull ghcr.io/zaproxy/zaproxy:stable
+                steps:
+                  - name: Checkout code
+                    uses: actions/checkout@v4
 
-      - name: ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.10.0
-        with:
-          target: 'http://localhost:8080'
-        # You can uncomment the following to save the ZAP report as a workflow artifact:
-        # artifact_name: 'zap-report'
+                  - name: Set up Docker Buildx
+                    uses: docker/setup-buildx-action@v3
 
-  docker:
-    name: Build Docker Image
-    runs-on: ubuntu-latest
-    needs: build-and-test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+                  - name: Build and load Docker image
+                    uses: docker/build-push-action@v6
+                    with:
+                      context: .
+                      load: true
+                      tags: dualboard-backend:latest
+                      cache-from: type=gha
+                      cache-to: type=gha,mode=max
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+                  - name: Save Docker image as artifact
+                    run: docker save dualboard-backend:latest -o dualboard-backend.tar
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+                  - name: Upload Image Artifact
+                    uses: actions/upload-artifact@v4
+                    with:
+                      name: docker-image
+                      path: dualboard-backend.tar
+                      retention-days: 1
 
-      - name: Build Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: false
-          tags: dualboard-backend:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+              zap-scan:
+                name: zap-scan-report
+                runs-on: ubuntu-latest
+                needs: docker-build
+                permissions:
+                  issues: write
+                  contents: read
+
+                services:
+                  postgres:
+                    image: postgres:16-alpine
+                    env:
+                      POSTGRES_DB: dualboard
+                      POSTGRES_USER: postgres
+                      POSTGRES_PASSWORD: postgres
+                    ports:
+                      - 5432:5432
+                    options: >-
+                      --health-cmd "pg_isready -U postgres"
+                      --health-interval 10s
+                      --health-timeout 5s
+                      --health-retries 5
+
+                steps:
+                  - name: Checkout code
+                    uses: actions/checkout@v4
+
+                  - name: Download Docker Image Artifact
+                    uses: actions/download-artifact@v4
+                    with:
+                      name: docker-image
+
+                  - name: Load Docker image
+                    run: docker load -i dualboard-backend.tar
+
+                  - name: Start backend container
+                    run: |
+                      docker run -d \
+                        --name backend-app \
+                        -p 8080:8080 \
+                        --add-host=host.docker.internal:host-gateway \
+                        -e SPRING_PROFILES_ACTIVE=dev \
+                        -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/dualboard \
+                        -e SPRING_DATASOURCE_USERNAME=postgres \
+                        -e SPRING_DATASOURCE_PASSWORD=postgres \
+                        -e SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver \
+                        dualboard-backend:latest
+                      sleep 5
+
+                  - name: Wait for backend to be ready
+                    run: |
+                      echo "Waiting for Spring Boot container to wake up..."
+                      for i in {1..30}; do
+                        if curl -sI http://localhost:8080/ | grep -q "HTTP/"; then
+                          echo "Backend container is up, responsive, and ready for scanning!"
+                          break
+                        fi
+                        echo "Attempt $i - Container port 8080 not answering yet. Retrying in 5s..."
+                        sleep 5
+                      
+                        if [ $i -eq 30 ]; then
+                          echo "ERROR: Container web server failed to respond on port 8080. Dumping live container logs:"
+                          docker logs backend-app
+                          exit 1
+                        fi
+                      done
+
+                  - name: Fix ZAP workspace permissions
+                    run: sudo chmod -R 777 ${{ github.workspace }}
+
+                  - name: ZAP Baseline Scan
+                    uses: zaproxy/action-baseline@v0.14.0
+                    with:
+                      target: 'http://localhost:8080'
+                      cmd_options: '-I'
+                      artifact_name: 'zap-scan-results'
+
+                  - name: Upload ZAP Scan Reports
+                    if: always()
+                    uses: actions/upload-artifact@v4
+                    with:
+                      name: zap-security-reports
+                      path: |
+                        report_json.json
+                        report_md.md
+                        report_html.html
+    
