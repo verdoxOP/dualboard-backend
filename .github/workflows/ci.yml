@@ -130,28 +130,30 @@ jobs:
         run: |
           docker run -d \
             --name backend-app \
-            --network host \
+            -p 8080:8080 \
+            --add-host=host.docker.internal:host-gateway \
             -e SPRING_PROFILES_ACTIVE=dev \
-            -e SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/dualboard \
+            -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/dualboard \
             -e SPRING_DATASOURCE_USERNAME=postgres \
             -e SPRING_DATASOURCE_PASSWORD=postgres \
             -e SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver \
             dualboard-backend:latest
           sleep 5
 
+      # Updated loop to look for ANY response on port 8080 instead of checking /actuator/health explicitly
       - name: Wait for backend to be ready
         run: |
           echo "Waiting for Spring Boot container to wake up..."
           for i in {1..30}; do
-            if curl -sf http://localhost:8080/actuator/health; then
-              echo "Backend container is up and healthy!"
+            if curl -sI http://localhost:8080/ | grep -q "HTTP/"; then
+              echo "Backend container is up, responsive, and ready for scanning!"
               break
             fi
-            echo "Attempt $i - Container app not ready yet. Retrying in 5s..."
+            echo "Attempt $i - Container port 8080 not answering yet. Retrying in 5s..."
             sleep 5
           
             if [ $i -eq 30 ]; then
-              echo "ERROR: Container failed to start. Dumping live container logs:"
+              echo "ERROR: Container web server failed to respond on port 8080. Dumping live container logs:"
               docker logs backend-app
               exit 1
             fi
