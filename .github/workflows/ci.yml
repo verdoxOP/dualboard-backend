@@ -3,9 +3,9 @@
 
             on:
               push:
-                branches: [ main, sonarqube ]
+                branches: [ main, sonarqube, master ]
               pull_request:
-                branches: [ main ]
+                branches: [ main, master ]
 
             permissions:
               contents: read
