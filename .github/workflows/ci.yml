@@ -8,7 +8,7 @@ on:
 
 permissions:
   contents: read
-  issues: write # Explicitly required to let ZAP create vulnerability issues
+  issues: write
 
 jobs:
   build-and-test:
@@ -36,7 +36,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Set up JDK 21 (required by Spring Boot 4.x / newer framework architectures)
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -58,7 +57,7 @@ jobs:
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
 
-      # Unified build & local/hosted SonarQube analysis execution
+      # Explicitly mapping Sonar variables into the maven command parameters
       - name: Build and analyze
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -171,7 +170,6 @@ jobs:
       - name: Fix ZAP workspace permissions
         run: sudo chmod -R 777 ${{ github.workspace }}
 
-      # We disable its automatic, breaking internal upload by keeping artifact_name empty
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.10.0
         with:
@@ -179,7 +177,6 @@ jobs:
           cmd_options: '-I'
           artifact_name: ''
 
-      # Modern, v4 upload framework to ensure reports are safely archived without errors
       - name: Upload ZAP Scan Reports
         if: always()
         uses: actions/upload-artifact@v4
