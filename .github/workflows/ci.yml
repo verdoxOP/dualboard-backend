@@ -49,7 +49,6 @@ jobs:
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
-
       - name: Build and analyze
         run: |
           ./mvnw -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
@@ -95,11 +94,10 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-
       - name: Start backend
         run: |
           ./mvnw clean package -DskipTests
-          nohup ./mvnw spring-boot:run -q &
+          nohup ./mvnw spring-boot:run -q > spring.log 2>&1 &
         env:
           SPRING_PROFILES_ACTIVE: dev
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/dualboard
@@ -108,19 +106,25 @@ jobs:
 
       - name: Wait for backend to be ready
         run: |
+          echo "Waiting for Spring Boot to wake up..."
           for i in {1..30}; do
-            curl -sf http://localhost:8080/actuator/health && break
-            echo "Attempt $i - waiting for Spring Boot application..."
+            if curl -sf http://localhost:8080/actuator/health; then
+              echo "Backend is up and healthy!"
+              break
+            fi
+            echo "Attempt $i - App not ready yet. Retrying in 5s..."
             sleep 5
+          
+            if [ $i -eq 30 ]; then
+              echo "ERROR: Server failed to start. Dumping spring.log:"
+              cat spring.log
+              exit 1
+            fi
           done
 
-      # Note: This step is good; ZAP runs inside a Docker container on the host
-      # and needs sweeping permissions to access workspace files.
       - name: Fix ZAP workspace permissions
         run: sudo chmod -R 777 ${{ github.workspace }}
 
-      # Note: Baseline scans are great, but if your API uses JWT token security,
-      # ZAP might hit 401 Unauthorized errors unless configured with auth tokens later on!
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.10.0
         with:
